@@ -2,6 +2,7 @@
 // https://github.com/renovatebot/github-action/blob/main/.github/renovate.json
 // https://docs.renovatebot.com/configuration-options/
 
+const fs = require('fs');
 const dry_run = process.env.RENOVATE_DRY_RUN
 console.log(`DRY_RUN mode: ${dry_run}`);
 
@@ -11,21 +12,23 @@ module.exports = {
   "extends": [":disableRateLimiting", ":semanticCommits"],
   "assigneesFromCodeOwners": true,
   "assignees": ["ivankatliarchuk"],
-  "labels": ["renovate", "dependencies"],
   "dependencyDashboardTitle": "Dependency Dashboard self-hosted",
-  "gitAuthor": "Renovate Bot <bot@renovateapp.com>",
+  "gitAuthor": "IK Renovate Bot <ikbot@renovateapp.com>",
   "onboarding": true,
   "platform": "github",
   "dryRun": dry_run,
-  // "repositories": ["cloudkats/docker-tools"],
-  "printConfig": false,
+  // "repositories": JSON.parse(fs.readFileSync('/ren/repositories.json', 'utf8')),
+  "printConfig": true,
+  "prConcurrentLimit": 0,
+  "prHourlyLimit": 0,
+  "stabilityDays": 3,
   "pruneStaleBranches": true,
   "recreateClosed": true,
+  "dependencyDashboard": false,
+  "requireConfig": false,
   "rebaseWhen": "behind-base-branch",
   "baseBranches": ["master", "main"],
   "username": "ivankatliarchuk",
-  "prHourlyLimit": 20,
-  "stabilityDays": 3,
   "semanticCommits": "enabled",
   "onboardingConfig": { "extends": ["github>ivankatliarchuk/.github"] },
   "hostRules": [
@@ -35,21 +38,25 @@ module.exports = {
       "password": process.env.RENOVATE_DOCKER_HUB_PASSWORD,
     },
   ],
+  "includeForks": true,
   "git-submodules": {
     "enabled": true
-    },
+  },
+  "pre-commit": {
+    "enabled": true
+  },
+  "labels": ["renovate", "deps"],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "addLabels": ["vulnerability"]
+  },
+  "additionalBranchPrefix": "{{packageFileDir}}-",
   "packageRules": [
     // labels section --> start
     {
-      "addLabels": ["renovate"]
-    },
-    {
-      "matchDatasources": ["git-refs", "github-tags"],
-      "addLabels": ["{{updateType}}"]
-    },
-    {
       "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
-      "addLabels": ["{{datasource}}", "{{updateType}}"]
+      "addLabels": ["{{depType}}", "{{datasource}}", "{{updateType}}"],
+      "commitMessageSuffix": '({{packageFile}})'
     },
     { "addLabels": ["php"], "matchLanguages": ["php"] },
     { "addLabels": ["js"], "matchLanguages": ["js"] },
@@ -114,17 +121,7 @@ module.exports = {
       "matchPackagePatterns": [".*"],
       "addLabels": ["{{datasource}}", "{{updateType}}"]
     },
-    {
-      "matchManagers": ["*"],
-      "addLabels": ["{{datasource}}", "{{updateType}}"]
-    },
-    {
-      "matchManagers": ["regex"],
-      "addLabels": ["{{datasource}}", "{{updateType}}"]
-    },
-
     // legacy
-
     {
       "versioning": "regex:^v(?<major>\\d+)(\\.(?<minor>\\d+))?(\\.(?<patch>\\d+))?",
       "groupName": "actions",
@@ -140,133 +137,12 @@ module.exports = {
       "versioning": "semver",
       "matchDatasources": "go",
       "matchManagers": ["gomod"],
-      "matchUpdateTypes": ["pin", "digest"],
       "addLabels": ["{{datasource}}", "{{updateType}}", "go"]
+    },
+    {
+      "matchPackageNames": ["kubernetes/kubernetes"],
+      "allowedVersions": "< 2"
     }
   ],
-  "regexManagers": [
-    {
-      "fileMatch": [
-        "Dockerfile$",
-        "^Dockerfile$",
-        "(^|/|\\.)Dockerfile$",
-        "(^|/)Dockerfile\\.[^/]*$"
-      ],
-      "matchStrings": [
-        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?\\sENV .*?_VERSION=(?<currentValue>.*)\\s"
-      ],
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v?(?<version>.*)$"
-    },
-    {
-      "fileMatch": [
-        "Dockerfile$",
-        "^Dockerfile$",
-        "(^|/|\\.)Dockerfile$",
-        "(^|/)Dockerfile\\.[^/]*$"
-      ],
-      "matchStrings": [
-        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?\\sARG .*?_VERSION=(?<currentValue>.*)\\s"
-      ],
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}",
-      "extractVersionTemplate": "^v?(?<version>.*)$"
-    },
-    {
-      "fileMatch": [
-        "Dockerfile$",
-        "(^|/|\\.)Dockerfile$",
-        "(^|/)Dockerfile\\.[^/]*$"
-      ],
-      "matchStrings": [
-        "ARG IMAGE=(?<depName>.*?):(?<currentValue>.*?)@(?<currentDigest>sha256:[a-f0-9]+)s"
-      ],
-      "datasourceTemplate": "docker"
-    },
-    {
-      // TODO: validate why is not working correctly
-      "fileMatch": [
-        "(^workflow-templates|.github/workflows)\/[^/]+\.ya?ml$",
-        "(^workflow-templates|.github/workflows)\/[^/]+\.ya?ml$(^|\/)action\.ya?ml$"
-      ],
-      "matchStrings": ["uses: (?<depName>.*?)@(?<currentValue>.*?)\n"],
-      "datasourceTemplate": "github-tags"
-    },
-    // legacy
-    {
-      "fileMatch": ["\\.yaml$"],
-      "matchStrings": [
-        "registryUrl=(?<registryUrl>.*?)\n *chart: (?<depName>.*?)\n *version: (?<currentValue>.*)\n"
-      ],
-      "datasourceTemplate": "helm"
-    },
-    {
-      "fileMatch": ["sample.yml"],
-      "matchStrings": ["version: (?<depName>.*?)@(?<currentValue>.*?)\n"],
-      "datasourceTemplate": "github-tags"
-    },
-    {
-      "fileMatch": ["versions.yml"],
-      "matchStrings": [
-        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?\n.*?_version: (?<currentValue>.*)\n"
-      ],
-      "versioningTemplate": "{{#if versioning}}{{versioning}}{{else}}semver{{/if}}"
-    },
-    {
-      "fileMatch": [
-        ".github/workflows/blank.yml",
-        ".github/workflows/takeover-output.yml"
-      ],
-      "matchStrings": ["uses: (?<depName>.*?)@(?<currentValue>.*?)\n"],
-      "datasourceTemplate": "github-releases"
-    },
-    {
-      fileMatch: [
-        "^Dockerfile$",
-        "Dockerfile$",
-      ],
-      matchStrings: [
-        "#\\s*renovate:\\s*datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?\\s(ARG|ENV) .*?_VERSION(=|\\s)(?<currentValue>.*)\\s"
-      ],
-      versioningTemplate: "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
-    },
-    {
-      "fileMatch": [
-        "^Dockerfile$",
-        "Dockerfile$",
-        "(^|/|\\.)Dockerfile$",
-        "(^|/)Dockerfile\\.[^/]*$"
-      ],
-      "matchStrings": [
-        "#\\s*renovate:\\s*depName=(?<depName>.*?)?\\s.*?:\\s(?<currentValue>.*)\\s"
-      ],
-      "versioningTemplate": "semver",
-      "datasourceTemplate": "github-releases",
-      "lookupNameTemplate": "{{{depName}}}"
-    },
-    {
-      "fileMatch": [
-        "Dockerfile$",
-        "^Dockerfile$",
-        "(^|/|\\.)Dockerfile$",
-        "(^|/)Dockerfile\\.[^/]*$"
-      ],
-      "matchStrings": [
-        "datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*?))?\\sENV .*?_VERSION=(?<currentValue>.*)\\s"
-      ],
-      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}",
-      "datasourceTemplate": "github-releases"
-    },
-    {
-      "fileMatch": [
-        "Dockerfile$",
-        "(^|/|\\.)Dockerfile$",
-        "(^|/)Dockerfile\\.[^/]*$"
-      ],
-      "matchStrings": [
-        "ARG IMAGE=(?<depName>.*?):(?<currentValue>.*?)@(?<currentDigest>sha256:[a-f0-9]+)s"
-      ],
-      "datasourceTemplate": "docker"
-    }
-  ]
+  // "regexManagers":
 };
